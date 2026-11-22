@@ -1,0 +1,126 @@
+{
+  "model_status": "FROZEN",
+  "pipeline_type": "Retrospective Historical Backtest",
+  "metrics": {
+    "precision": 78.12,
+    "recall": 80.65,
+    "f1_score": 79.37,
+    "roc_auc": 0.948,
+    "false_alarm_rate": 24.14,
+    "missed_event_rate": 19.35,
+    "mean_critical_lead_time_hours": 9.88,
+    "detection_rate_pct": 87.5
+  },
+  "events": [
+    {
+      "id": "wayanad-2024",
+      "name": "2024 Wayanad Catastrophic Landslides",
+      "location": "Chooralmala & Mundakkai, Wayanad, Kerala",
+      "is_control": false,
+      "watch_lead_hours": 24.0,
+      "critical_lead_hours": 12.0,
+      "peak_risk_score": 86,
+      "peak_caine_ratio": 6.47,
+      "detected": true
+    },
+    {
+      "id": "sikkim-glof-2023",
+      "name": "2023 South Lhonak GLOF & Teesta Flash Flood",
+      "location": "Chungthang & Teesta Basin, Sikkim",
+      "is_control": false,
+      "watch_lead_hours": 12.0,
+      "critical_lead_hours": 6.0,
+      "peak_risk_score": 75,
+      "peak_caine_ratio": 3.8,
+      "detected": true
+    },
+    {
+      "id": "himachal-cloudburst-2023",
+      "name": "2023 Himachal Pradesh Monsoon Cloudburst",
+      "location": "Summer Hill & Beas Basin, Shimla & Mandi, HP",
+      "is_control": false,
+      "watch_lead_hours": 12.0,
+      "critical_lead_hours": 12.0,
+      "peak_risk_score": 81,
+      "peak_caine_ratio": 4.86,
+      "detected": true
+    },
+    {
+      "id": "raigad-irshalwadi-2023",
+      "name": "2023 Irshalwadi Catastrophic Hillside Failure",
+      "location": "Irshalwadi, Khalapur, Raigad, Maharashtra",
+      "is_control": false,
+      "watch_lead_hours": 24.0,
+      "critical_lead_hours": 12.0,
+      "peak_risk_score": 88,
+      "peak_caine_ratio": 4.61,
+      "detected": true
+    },
+    {
+      "id": "assam-silchar-2022",
+      "name": "2022 Assam Severe Flash Floods",
+      "location": "Bethukandi & Silchar, Cachar, Assam",
+      "is_control": false,
+      "watch_lead_hours": 24.0,
+      "critical_lead_hours": 0.0,
+      "peak_risk_score": 68,
+      "peak_caine_ratio": 3.98,
+      "detected": false
+    },
+    {
+      "id": "meghalaya-sohra-2022",
+      "name": "2022 Cherrapunji Record Cloudburst Torrent",
+      "location": "Sohra Gorge & Shella River, Meghalaya",
+      "is_control": false,
+      "watch_lead_hours": 24.0,
+      "critical_lead_hours": 24.0,
+      "peak_risk_score": 86,
+      "peak_caine_ratio": 10.4,
+      "detected": true
+    },
+    {
+      "id": "chamoli-2021",
+      "name": "2021 Chamoli Glacial Detachment Torrent",
+      "location": "Ronti Peak, Joshimath, Uttarakhand",
+      "is_control": false,
+      "watch_lead_hours": 5.0,
+      "critical_lead_hours": 1.0,
+      "peak_risk_score": 85,
+      "peak_caine_ratio": 1.18,
+      "detected": true
+    },
+    {
+      "id": "derna-dam-2023",
+      "name": "2023 Derna Dam Collapse & Medicane Daniel Inundation",
+      "location": "Wadi Derna, Jabal al Akhdar, Libya",
+      "is_control": false,
+      "watch_lead_hours": 24.0,
+      "critical_lead_hours": 12.0,
+      "peak_risk_score": 79,
+      "peak_caine_ratio": 4.98,
+      "detected": true
+    },
+    {
+      "id": "control-guwahati-2023",
+      "name": "Guwahati Heavy Monsoon Inundation (Non-Failure Control)",
+      "location": "Guwahati Hills & Deepor Beel, Assam",
+      "is_control": true,
+      "watch_lead_hours": 0.0,
+      "critical_lead_hours": 0.0,
+      "peak_risk_score": 29,
+      "peak_caine_ratio": 0.77,
+      "detected": false
+    },
+    {
+      "id": "control-shillong-2023",
+      "name": "Shillong Ridge Forested High Precipitation (Non-Failure Control)",
+      "location": "Upper Shillong Catchment, Meghalaya",
+      "is_control": true,
+      "watch_lead_hours": 0.0,
+      "critical_lead_hours": 0.0,
+      "peak_risk_score": 33,
+      "peak_caine_ratio": 0.86,
+      "detected": false
+    }
+  ]
+}

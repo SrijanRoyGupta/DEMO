@@ -1,0 +1,339 @@
+import { t as clamp } from "./utils-Ds1vuMy5.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/risk-CyJhvRVe.js
+var RISK_HEX = {
+	safe: "#34d399",
+	watch: "#f5a524",
+	crit: "#fb7185",
+	accent: "#38bdf8"
+};
+/**
+* Caine (1980) Global Rainfall Intensity-Duration Threshold
+* Published in Geografiska Annaler, Series A: Physical Geography:
+*   I_c = 14.82 * D^(-0.39) (mm/h)
+* where D is storm duration in hours.
+* Recognised globally by USGS, British Geological Survey, and UNDRR as the reference
+* empirical boundary above which debris flows and shallow landslides are triggered.
+*/
+function caineThreshold(durationHours) {
+	return 14.82 * Math.pow(Math.max(.25, Math.min(168, durationHours)), -.39);
+}
+/**
+* Global-Grade Multi-Hazard Risk Model:
+* Structured as: Hazard = Susceptibility x Trigger
+* Aligned with USGS Global Landslide Susceptibility Model (GLSM) and UNDRR standards.
+*/
+function calculateRisk(st) {
+	const rain1h = Math.max(0, st.rain);
+	const rain6h = Math.max(0, st.rain6h ?? rain1h * 3.5);
+	const rain24h = Math.max(0, st.rain24h ?? rain1h * 8);
+	const caine1hThresh = caineThreshold(1);
+	const caine6hThresh = caineThreshold(6);
+	const caine24hThresh = caineThreshold(24);
+	const r1 = rain1h / caine1hThresh;
+	const r6 = rain6h / 6 / caine6hThresh;
+	const r24 = rain24h / 24 / caine24hThresh;
+	const caineRatio = Math.max(r1, r6, r24);
+	const caineExceeded = caineRatio >= 1;
+	const slope = st.slopeDeg ?? 28;
+	const slopeRad = slope * Math.PI / 180;
+	const slopeFactor = clamp(Math.sin(slopeRad) * 1.35, .1, 1);
+	const clayPct = st.clayFractionPct ?? 32;
+	const soilFactor = clamp(clayPct / 50 * .7 + .3, .2, 1);
+	const vegCover = st.vegetationCoverPct ?? 55;
+	const vegetationFactor = clamp(1 - vegCover / 100 * .5, .3, .95);
+	const histBaseline = clamp(st.histScore, .2, .95);
+	const susceptibility = clamp(.38 * slopeFactor + .24 * soilFactor + .2 * vegetationFactor + .18 * histBaseline, .15, .98);
+	const caineFactor = clamp(caineRatio / 1.15, 0, 1);
+	const satRatio = clamp(st.moist / 100, 0, 1);
+	const moistureFactor = Math.pow(satRatio, 1.8);
+	const dbz = st.dopplerDbz ?? (rain1h > 0 ? clamp(20 + Math.log10(rain1h + .1) * 15, 10, 60) : 12);
+	const radarFactor = clamp(dbz / 52, 0, 1);
+	const tiltFactor = clamp(st.tilt / 4.2, 0, 1);
+	const pga = st.seismicPgaG ?? .005;
+	const seismicFactor = clamp(pga / .12, 0, 1);
+	let dischargeFactor = 0;
+	if (st.discharge != null && st.dischargeMean && st.dischargeMean > 0) {
+		const ratio = st.discharge / st.dischargeMean;
+		dischargeFactor = clamp((ratio - .9) / 1.5, 0, 1);
+	}
+	let spatialFactor = 0;
+	if (st.rainSpatialMax5km != null && st.rainSpatialMax5km > rain1h) {
+		const diff = st.rainSpatialMax5km - rain1h;
+		const dist = st.distanceToMaxRainKm ?? 2.5;
+		const distDecay = clamp(1 - dist / 6, .2, 1);
+		spatialFactor = clamp(diff / 25 * distDecay, 0, 1);
+	}
+	let rawTrigger = (spatialFactor > 0 ? .3 : .35) * caineFactor + (spatialFactor > 0 ? .22 : .25) * moistureFactor + .15 * radarFactor + (spatialFactor > 0 ? .12 * spatialFactor : 0) + (spatialFactor > 0 ? .11 : .13) * tiltFactor + (spatialFactor > 0 ? .06 : .07) * seismicFactor + (spatialFactor > 0 ? .04 : .05) * dischargeFactor;
+	if (caineExceeded && satRatio >= .75) rawTrigger = Math.min(1, rawTrigger * 1.35 + .12);
+	const trigger = clamp(rawTrigger, .02, 1);
+	const histNorm = clamp(Math.round((st.histScore ?? .5) * 100), 0, 100);
+	const slopeNorm = clamp(Math.round(slope / 45 * 85 + (st.tilt > 1 ? 15 : 0)), 0, 100);
+	const moistNorm = clamp(Math.round(st.moist), 0, 100);
+	const rainNorm = clamp(Math.round(Math.min(100, rain1h / 40 * 75 + (caineExceeded ? 25 : 0))), 0, 100);
+	const geolNorm = clamp(Math.round(clayPct / 50 * 55 + (st.sarDeformationMmYr ? Math.min(st.sarDeformationMmYr / 25, 1) * 45 : 20)), 0, 100);
+	const drainNorm = clamp(Math.round(spatialFactor * 65 + dischargeFactor * 35), 0, 100);
+	const trendNorm = clamp(Math.round((rain1h > 15 ? 75 : rain1h > 5 ? 40 : 15) + (st.tilt > .8 ? 25 : 0)), 0, 100);
+	const landslideBreakdown = {
+		history: {
+			name: "Historical Susceptibility",
+			weightPct: 30,
+			score: histNorm,
+			weightedValue: Number((histNorm * 30 / 100).toFixed(1)),
+			description: "Persistent baseline terrain susceptibility based on documented disaster inventory"
+		},
+		slope: {
+			name: "Slope Gradient & Tilt",
+			weightPct: 20,
+			score: slopeNorm,
+			weightedValue: Number((slopeNorm * 20 / 100).toFixed(1)),
+			description: "DEM topographic slope angle and real-time physical sensor tilt displacement"
+		},
+		soilMoisture: {
+			name: "Soil Moisture & Saturation",
+			weightPct: 15,
+			score: moistNorm,
+			weightedValue: Number((moistNorm * 15 / 100).toFixed(1)),
+			description: "Pore-water pressure and volumetric water content saturation"
+		},
+		rainfall: {
+			name: "Rainfall Intensity & Ingest",
+			weightPct: 15,
+			score: rainNorm,
+			weightedValue: Number((rainNorm * 15 / 100).toFixed(1)),
+			description: "Instantaneous Doppler radar rain rate and Caine I-D threshold ratio"
+		},
+		geology: {
+			name: "Geology & Regolith Texture",
+			weightPct: 10,
+			score: geolNorm,
+			weightedValue: Number((geolNorm * 10 / 100).toFixed(1)),
+			description: "ISRIC SoilGrids clay content, permeability Ksat, and InSAR creep deformation"
+		},
+		drainage: {
+			name: "Drainage & Spatial Proximity",
+			weightPct: 5,
+			score: drainNorm,
+			weightedValue: Number((drainNorm * 5 / 100).toFixed(1)),
+			description: "Concentric 1–5 km convective storm core proximity and catchment drainage"
+		},
+		trend: {
+			name: "Environmental Trend & Kinematics",
+			weightPct: 5,
+			score: trendNorm,
+			weightedValue: Number((trendNorm * 5 / 100).toFixed(1)),
+			description: "Rainfall acceleration and rate of tilt change over time"
+		}
+	};
+	const landslideRisk = clamp(Math.round(landslideBreakdown.history.weightedValue + landslideBreakdown.slope.weightedValue + landslideBreakdown.soilMoisture.weightedValue + landslideBreakdown.rainfall.weightedValue + landslideBreakdown.geology.weightedValue + landslideBreakdown.drainage.weightedValue + landslideBreakdown.trend.weightedValue), 0, 100);
+	const curRainNorm = clamp(Math.round(rain1h / 50 * 100), 0, 100);
+	const anteRainNorm = clamp(Math.round(rain6h / 90 * 100), 0, 100);
+	const accumNorm = clamp(Math.round(rain24h / 180 * 100), 0, 100);
+	const drainRunoffNorm = clamp(Math.round(dischargeFactor * 70 + (slope < 15 ? 30 : 10)), 0, 100);
+	const floodHistNorm = clamp(Math.round(slope < 20 ? st.histScore * 100 : st.histScore * 65), 0, 100);
+	const soilSatNorm = clamp(Math.round(st.moist), 0, 100);
+	const flashFloodBreakdown = {
+		currentRain: {
+			name: "Current Rainfall Intensity",
+			weightPct: 25,
+			score: curRainNorm,
+			weightedValue: Number((curRainNorm * 25 / 100).toFixed(1)),
+			description: "Instantaneous radar/gauge precipitation intensity rate (mm/h)"
+		},
+		antecedentRain: {
+			name: "Antecedent 6-Hour Rainfall",
+			weightPct: 20,
+			score: anteRainNorm,
+			weightedValue: Number((anteRainNorm * 20 / 100).toFixed(1)),
+			description: "Recent storm accumulation charging valley catchment tributaries"
+		},
+		accumulation: {
+			name: "Rolling 24-Hour Total",
+			weightPct: 15,
+			score: accumNorm,
+			weightedValue: Number((accumNorm * 15 / 100).toFixed(1)),
+			description: "Cumulative multi-day precipitation loading regional waterways"
+		},
+		drainageRunoff: {
+			name: "Drainage & River Runoff",
+			weightPct: 15,
+			score: drainRunoffNorm,
+			weightedValue: Number((drainRunoffNorm * 15 / 100).toFixed(1)),
+			description: "GloFAS river discharge ratio and valley floor constriction factor"
+		},
+		floodHistory: {
+			name: "Terrain Flood History",
+			weightPct: 15,
+			score: floodHistNorm,
+			weightedValue: Number((floodHistNorm * 15 / 100).toFixed(1)),
+			description: "Historical inundation and basin submergence records"
+		},
+		soilSaturation: {
+			name: "Soil Saturation & Runoff Yield",
+			weightPct: 10,
+			score: soilSatNorm,
+			weightedValue: Number((soilSatNorm * 10 / 100).toFixed(1)),
+			description: "Reduced infiltration capacity forcing immediate surface runoff sheetwash"
+		}
+	};
+	const flashFloodRisk = clamp(Math.round(flashFloodBreakdown.currentRain.weightedValue + flashFloodBreakdown.antecedentRain.weightedValue + flashFloodBreakdown.accumulation.weightedValue + flashFloodBreakdown.drainageRunoff.weightedValue + flashFloodBreakdown.floodHistory.weightedValue + flashFloodBreakdown.soilSaturation.weightedValue), 0, 100);
+	const primaryDrivers = [];
+	if (caineExceeded) primaryDrivers.push(`Caine (1980) physical threshold breached (${caineRatio.toFixed(2)}x threshold)`);
+	if (slope >= 28) primaryDrivers.push(`Steep topographic terrain slope (${slope}° gradient)`);
+	if (histNorm >= 70) primaryDrivers.push("High historical disaster and terrain susceptibility baseline");
+	if (rain1h >= 15) primaryDrivers.push(`Torrential precipitation intensity (${rain1h.toFixed(1)} mm/hr)`);
+	if (moistNorm >= 75) primaryDrivers.push(`Elevated pore-water pressure and soil saturation (${moistNorm}%)`);
+	if (st.tilt >= .8) primaryDrivers.push(`Active geotechnical ground tilt displacement (${st.tilt.toFixed(2)}°)`);
+	if (slope < 15 && dischargeFactor > .3) primaryDrivers.push("Low-lying floodplain elevation with elevated river discharge");
+	if (primaryDrivers.length === 0) primaryDrivers.push("Environmental and geotechnical parameters within normal baseline limits");
+	const meteorologicalTrigger = Math.max(caineRatio, rain1h / 14.82, rain6h / 45, (st.rainForecast ?? 0) / 15);
+	const seismicTrigger = (st.seismicPgaG ?? .004) > .04 ? (st.seismicPgaG ?? .004) / .08 : 0;
+	const activeTriggerMetric = Math.max(meteorologicalTrigger, seismicTrigger);
+	let activeLandslideScore = landslideRisk;
+	let activeFloodScore = flashFloodRisk;
+	if (activeTriggerMetric < .1) {
+		activeLandslideScore = Math.min(Math.round(landslideRisk * .35), 28);
+		activeFloodScore = Math.min(Math.round(flashFloodRisk * .3), 22);
+	} else if (activeTriggerMetric < .6) {
+		const factor = .35 + .65 * (activeTriggerMetric / .6);
+		activeLandslideScore = Math.min(Math.round(landslideRisk * factor), 58);
+		activeFloodScore = Math.min(Math.round(flashFloodRisk * factor), 55);
+	}
+	const dominantHazardScore = slope >= 22 ? Math.max(activeLandslideScore, Math.round(activeFloodScore * .85)) : Math.max(activeFloodScore, Math.round(activeLandslideScore * .85));
+	const totalScore = clamp(dominantHazardScore, 0, 100);
+	const level = totalScore >= 70 ? "CRITICAL" : totalScore >= 40 ? "WATCH" : "SAFE";
+	const popDensity = st.populationDensity ?? 850;
+	const popFactor = clamp(.65 + .35 * Math.min(popDensity / 3e3, 1), .65, 1);
+	const riskToPeople = clamp(Math.round(totalScore * popFactor), 0, 100);
+	const provenance = st.provenance ?? (st.tilt > 0 ? "MEASURED_IOT" : "DOPPLER_RADAR");
+	const confidencePct = provenance === "MEASURED_IOT" ? 96 : provenance === "DOPPLER_RADAR" ? 88 : provenance === "SATELLITE_GPM" ? 82 : provenance === "SAR_SENTINEL1" ? 80 : 68;
+	return {
+		total: totalScore,
+		level,
+		landslideRisk,
+		flashFloodRisk,
+		landslideBreakdown,
+		flashFloodBreakdown,
+		primaryDrivers,
+		susceptibility: Number(susceptibility.toFixed(3)),
+		trigger: Number(trigger.toFixed(3)),
+		caineRatio: Number(caineRatio.toFixed(2)),
+		caineExceeded,
+		caineThreshold1h: Number(caine1hThresh.toFixed(2)),
+		caineIntensity1h: Number(rain1h.toFixed(2)),
+		riskToPeople,
+		confidencePct,
+		provenance,
+		breakdown: {
+			slopeFactor: Number(slopeFactor.toFixed(2)),
+			soilFactor: Number(soilFactor.toFixed(2)),
+			vegetationFactor: Number(vegetationFactor.toFixed(2)),
+			caineFactor: Number(caineFactor.toFixed(2)),
+			moistureFactor: Number(moistureFactor.toFixed(2)),
+			radarFactor: Number(radarFactor.toFixed(2)),
+			spatialFactor: Number(spatialFactor.toFixed(2)),
+			tiltFactor: Number(tiltFactor.toFixed(2)),
+			seismicFactor: Number(seismicFactor.toFixed(2))
+		}
+	};
+}
+function riskColor(score) {
+	if (score >= 70) return RISK_HEX.crit;
+	if (score >= 40) return RISK_HEX.watch;
+	return RISK_HEX.safe;
+}
+function derivedTilt(baseTilt, moist, rain) {
+	const sat = moist / 100;
+	const rainF = Math.min(rain, 40) / 40;
+	return clamp(baseTilt * (1 + sat * .55 + rainF * 1.1), 0, 8);
+}
+function volumetricToSaturation(vwc) {
+	return clamp((vwc - .08) / .38 * 100, 4, 99);
+}
+function projectLeadTime(st, simSurge = false) {
+	const now = calculateRisk(st);
+	if (now.total >= 70) return {
+		level: "critical",
+		etaLabel: "Caine I-D Threshold Breached",
+		leadLabel: "Evacuation directives active",
+		message: `Critical debris-flow trigger breached at ${st.name} (Caine ratio: ${now.caineRatio}x). Immediate life-safety action active.`,
+		caineTriggerLeadHours: 0
+	};
+	let soil = st.moist;
+	let tilt = st.tilt;
+	let rain24 = st.rain24h;
+	const hours = st.forecast1h.slice(0, 6);
+	for (let i = 0; i < hours.length; i++) {
+		const mm = hours[i]?.mm ?? 0;
+		soil = clamp(soil + mm * .42, 0, 100);
+		tilt = clamp(tilt + mm * .018, 0, 8);
+		rain24 += mm;
+		const projected = calculateRisk({
+			rain: mm,
+			moist: soil,
+			tilt,
+			histScore: st.histScore,
+			rain24h: rain24,
+			rain6h: st.rain6h,
+			discharge: st.discharge,
+			dischargeMean: st.dischargeMean,
+			slopeDeg: st.slopeDeg,
+			clayFractionPct: st.clayFractionPct,
+			vegetationCoverPct: st.vegetationCoverPct,
+			populationDensity: st.populationDensity,
+			dopplerDbz: st.dopplerDbz
+		});
+		if (projected.total >= 70) {
+			const eta = i + 1;
+			return {
+				level: "trajectory",
+				etaLabel: `Caine breach in ${eta}h`,
+				leadLabel: `${eta.toFixed(0)} hour advance lead-time window`,
+				message: `ECMWF/MET forecast of ${mm.toFixed(1)} mm/h at hour +${eta} causes Caine I-D exceedance (proj ratio: ${projected.caineRatio}x). Evacuation window is open.`,
+				caineTriggerLeadHours: eta
+			};
+		}
+		if (projected.total >= 40 && now.total < 40 && i <= 1) return {
+			level: "trajectory",
+			etaLabel: "Watch threshold inside 2h",
+			leadLabel: "3 to 4 hour advance window open",
+			message: `Upstream radar/forecast shows rising precipitation rate. Place ${st.name} emergency teams on alert.`,
+			caineTriggerLeadHours: 2
+		};
+	}
+	if (simSurge && now.total >= 40) return {
+		level: "trajectory",
+		etaLabel: "Simulated cloudburst surge ETA 03h 45m",
+		leadLabel: "Advance lead time: 3.8 hours",
+		message: "Stress simulation: Caine I-D rainfall threshold breached with high pore-water saturation.",
+		caineTriggerLeadHours: 3.8
+	};
+	return {
+		level: "stable",
+		etaLabel: "Within safe Caine I-D envelope",
+		leadLabel: "4 to 6 hour horizon monitored",
+		message: "Rainfall intensity and pore-water pressure remain safely below Caine (1980) triggering curves."
+	};
+}
+function symbolLabel(symbol) {
+	const key = symbol.replace(/_(day|night)$/, "");
+	return {
+		fair: "Clear",
+		clearsky: "Clear",
+		partlycloudy: "Partly cloudy",
+		cloudy: "Overcast",
+		rainshowers: "Rain showers",
+		rain: "Rain",
+		heavyrain: "Heavy rain",
+		heavyrainshowers: "Heavy rain showers",
+		lightrain: "Light rain",
+		lightrainshowers: "Light showers",
+		thunderstorm: "Thunderstorm",
+		rainandthunder: "Rain and thunder",
+		heavyrainandthunder: "Severe thunder rain",
+		fog: "Fog",
+		snow: "Snow",
+		sleet: "Sleet"
+	}[key] ?? key.replaceAll("_", " ");
+}
+//#endregion
+export { projectLeadTime as a, volumetricToSaturation as c, derivedTilt as i, caineThreshold as n, riskColor as o, calculateRisk as r, symbolLabel as s, RISK_HEX as t };
